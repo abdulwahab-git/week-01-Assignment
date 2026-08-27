@@ -1,9 +1,9 @@
 # Capstone Report — <your lane>
 
-- **Author:**
-- **Lane:**
-- **Repo:**
-- **Date:**
+- **Author:** Abdul Wahab Baig
+- **Lane:** Machine Learning Intern
+- **Repo:** abdulwahab-git/week-01-Assignment
+- **Date:** July 2026
 
 > Copy this file to `work/capstone_report.md` and fill it in as you build. The eight
 > sections mirror the Pass / Needs-Work rubric axes, so nothing here is optional.
