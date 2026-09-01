@@ -147,8 +147,5 @@ querying the Hugging Face-hosted Parquet warehouse directly, plus `pandas`. Outp
 artifacts, not source-controlled data.
 
 ---
-
-> **Claims checklist before submitting:** observed / measured / directional / decision-support
-> language everywhere · no causal claims without an experiment or causal design · no
-> "predicted Google's algorithm" · no client-identifying details · numbers in this report
-> match a fresh re-run.
+#9. Acknowledgments & data credit:
+This research and engineering development was built on the data warehouse infrastructure provided by the [FlyRank ML Internship Track.](https://flyrank.ai/) The underlying performance matrix distributions, schema partitions, and baseline tracking properties originate entirely from their verified enterprise data warehouse instances.
