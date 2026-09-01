@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Can a Random Forest Predict Organic Search Traffic Decline Before It Happens?</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --sub:#5a5a5a; --line:#e4e2dd; --accent:#b5432f;
+    --bg:#fbfaf7; --card:#ffffff;
+    --serif:'Georgia','Iowan Old Style',serif; --sans:-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--serif);line-height:1.65;}
+  .wrap{max-width:760px;margin:0 auto;padding:56px 24px 100px;}
+  h1{font-size:2rem;line-height:1.25;margin:0 0 8px;}
+  .kicker{font-family:var(--sans);text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;color:var(--accent);margin-bottom:14px;}
+  .abstract{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);padding:22px 24px;margin:24px 0 40px;font-size:0.98rem;}
+  .abstract strong{font-family:var(--sans);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);display:block;margin-bottom:8px;}
+  h2{font-size:1.3rem;border-top:1px solid var(--line);padding-top:36px;margin-top:44px;}
+  h3{font-size:1.02rem;font-family:var(--sans);color:var(--sub);margin-top:26px;}
+  p{margin:0 0 14px;}
+  code{background:#f0eee9;padding:1px 6px;border-radius:3px;font-size:.88em;}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-family:var(--sans);font-size:.9rem;}
+  th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{color:var(--sub);font-weight:600;border-bottom:2px solid var(--ink);}
+  tr:last-child td{font-weight:600;}
+  .caption{font-family:var(--sans);font-size:.82rem;color:var(--sub);margin-top:-10px;margin-bottom:22px;}
+  .tiers{font-family:var(--sans);font-size:.92rem;}
+  .tiers li{margin-bottom:8px;}
+  .badge{display:inline-block;font-family:var(--sans);font-size:.75rem;padding:2px 8px;border-radius:10px;color:#fff;margin-right:6px;}
+  .critical{background:#b5432f;} .optimize{background:#c98a2c;} .monitor{background:#5a7a5f;}
+  footer{font-family:var(--sans);font-size:.82rem;color:var(--sub);margin-top:60px;border-top:1px solid var(--line);padding-top:20px;}
+  a{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker">Research Note · Applied ML</div>
+  <h1>Can a Random Forest Predict Organic Search Traffic Decline Before It Happens?</h1>
+
+  <div class="abstract">
+    <strong>Abstract</strong>
+    Enterprise content teams often notice organic search decline only after visibility has already
+    evaporated. This study asks whether a tree-based ensemble model can flag pages at risk of a
+    significant 90-day organic-impression drop early enough to act. Using ~427K content-performance
+    records from the FlyRank internship data warehouse and a client-grouped train/test split, a
+    Random Forest (100 trees, depth 8) was compared against a majority-class baseline. The model
+    lifted accuracy from 28.17% to 66.54% and F1 from 43.96% to 48.63%, at the cost of lower recall
+    (56.22% vs. the baseline's trivial 100%). The result is directional, not causal: it's built as a
+    decision-support signal for prioritizing human review, not a standalone verdict.
+  </div>
+
+  <h2>1. The Question</h2>
+  <p>
+    <strong>Can tree-based ensemble models accurately predict significant long-term organic search
+    traffic drops within an enterprise website architecture before visibility entirely evaporates?</strong>
+  </p>
+  <p>
+    By the time a page's search visibility has fully collapsed, the fix is often reactive and costly.
+    The decision this supports is narrower and more useful: give content teams a prioritized,
+    risk-ranked queue of pages worth reviewing now — before the drop is complete — so engineering
+    hours go to the assets that need them most.
+  </p>
+
+  <h2>2. Data</h2>
+  <p>
+    The analysis uses the FlyRank ML Internship dataset, published publicly on Hugging Face as
+    <code>FlyRank/internship-warehouse</code>, specifically the <code>fact_content_daily_performance</code>
+    table of daily content-performance observations. The target metric is Google Search Console
+    impressions (<code>gsc_impressions</code>).
+  </p>
+  <p>
+    Data was queried directly from the 2026 monthly Parquet partitions via DuckDB (10GB memory cap)
+    rather than loaded fully into memory, and the maximum available report date was computed
+    programmatically to avoid a hard-coded timeline. Only aggregate findings and methodology are
+    reported here — no client names, private URLs, or raw queries appear anywhere in this write-up.
+  </p>
+
+  <h2>3. Methodology</h2>
+  <h3>Label definition</h3>
+  <p>
+    Impressions were aggregated per client/content pair into a prior-period and a most-recent-90-day
+    window. A decline score was defined as:
+  </p>
+  <p><code>action_score = impressions_last_90d / (impressions_prior + 1)</code></p>
+  <p>
+    A page is labeled a positive decline case when <code>action_score &lt; 0.8</code> — i.e. its recent
+    90-day impression volume fell below 80% of its prior baseline. The <code>+1</code> avoids
+    division-by-zero for pages with no prior tracking history.
+  </p>
+  <h3>Features</h3>
+  <p>
+    Two features feed the model: <code>impressions_prior</code> (historical impressions before the
+    most recent 90-day window) and <code>active_days_count</code> (distinct reporting days observed).
+    The window variables used to build the label are excluded from the feature set.
+  </p>
+  <h3>Validation design</h3>
+  <p>
+    To avoid client-specific memorization, the split is <strong>client-grouped</strong>: ~80% of unique
+    clients form the training set, and the remaining clients — entirely unseen during training — form
+    the evaluation set. This estimates generalization to new enterprise domains rather than
+    performance on already-observed clients.
+  </p>
+  <h3>Model &amp; baseline</h3>
+  <p>
+    A Random Forest classifier (100 trees, max depth 8, seed 42) was trained on the grouped training
+    split. It is compared against a majority-class baseline — predicting the training set's most
+    common label for every evaluation row — on the exact same held-out client groups.
+  </p>
+  <h3>Validation sanity check</h3>
+  <p>
+    Before settling on the client-grouped split, the same model was also tested under a plain random
+    split. Random splitting reported 76.58% accuracy — noticeably higher than the 66.54% the
+    client-grouped split reports. That gap is itself a finding: a random split lets the model see
+    some of a client's pages in training and others in test, so part of that extra accuracy is the
+    model memorizing client-specific quirks rather than learning a generalizable pattern. The
+    client-grouped number is the one reported throughout this paper because it's the honest estimate
+    of performance on a client the model has never seen.
+  </p>
+
+  <h2>4. Results</h2>
+  <table>
+    <thead><tr><th>Metric</th><th>Majority-class baseline</th><th>Random Forest</th></tr></thead>
+    <tbody>
+      <tr><td>Accuracy</td><td>28.17%</td><td>66.54%</td></tr>
+      <tr><td>Precision</td><td>28.17%</td><td>42.85%</td></tr>
+      <tr><td>Recall</td><td>100.00%</td><td>56.22%</td></tr>
+      <tr><td>F1-score</td><td>43.96%</td><td>48.63%</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">Same client-grouped holdout for both approaches (30,322 evaluation rows).</p>
+  <p>
+    Accuracy roughly <strong>2.4×</strong>'d over baseline (28.17% → 66.54%), and F1 improved
+    modestly (43.96% → 48.63%). The baseline's 100% recall is a trivial artifact of always predicting
+    the majority class — the model trades that away for far better precision (28.17% → 42.85%),
+    meaning its flagged "at-risk" pages are actually at risk much more often.
+  </p>
+  <p>
+    Feature importance skews heavily toward one signal: <code>active_days_count</code> accounts for
+    ~87% of the model's decision weight, versus ~13% for <code>impressions_prior</code>. In practice
+    the model leans mainly on how consistently a page has been tracked, not on its raw historical
+    impression volume — worth keeping in mind when reading any single prediction.
+  </p>
+
+  <h2>5. Limitations</h2>
+  <p>
+    The model reasons from historical impression behavior alone. It cannot account for
+    macro-level causes — search-engine algorithm updates, intentional URL migrations, or seasonal
+    demand cycles. Pages with little or no prior tracking history are especially prone to false
+    alarms, since the model has almost no baseline to compare against: 8,533 such edge cases were
+    identified in evaluation and should be routed to manual review rather than the automated queue.
+    This is a directional decision-support signal, not evidence of causal prediction or a guarantee
+    of traffic recovery.
+  </p>
+
+  <h2>6. Ranked Recommendations</h2>
+  <p>
+    Rather than a binary flag, each page gets a continuous risk score, ranked into three operational
+    tiers:
+  </p>
+  <ul class="tiers">
+    <li><span class="badge critical">≥ 0.80</span> <strong>Critical / urgent salvage</strong> — highest priority, review immediately.</li>
+    <li><span class="badge optimize">0.50 – 0.79</span> <strong>Optimize content footprint</strong> — elevated-risk candidates for review.</li>
+    <li><span class="badge monitor">&lt; 0.50</span> <strong>Monitor / stable</strong> — stays in the watch pool.</li>
+  </ul>
+  <p>
+    Any page scoring 0.50 or higher requires human sign-off before action — the score prioritizes,
+    a specialist decides.
+  </p>
+
+  <h2>7. Reproducibility</h2>
+  <p>
+    Random Forest: 100 trees, max depth 8, seed 42. Full notebook and code:
+    <a href="https://github.com/abdulwahab-git/week-01-Assignment/blob/main/work/notebooks/capstone.ipynb">capstone.ipynb</a>
+    in the <a href="https://github.com/abdulwahab-git/week-01-Assignment">week-01-Assignment repo</a>.
+  </p>
+
+  <footer>
+    Data: FlyRank ML Internship dataset, via Hugging Face
+    (<a href="https://huggingface.co/datasets/FlyRank/internship-warehouse">FlyRank/internship-warehouse</a>).
+  </footer>
+
+</div>
+</body>
+</html>
